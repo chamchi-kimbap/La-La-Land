@@ -1,0 +1,110 @@
+---
+title: "체감온도를 이용한 서울 구 클러스터링"
+author: "SungChul Hong"
+date: '2019 7 20 '
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+library(kableExtra)
+library(tidyverse)
+library(data.table)
+
+opts_knit$set(root.dir ='C:\\Users\\UOS\\Desktop\\weather\\data')
+```
+
+```{r, echo=FALSE}
+load('db_seoul_cluster_winter.RData')
+```
+
+### 체감온도 ANOVA TEST와 TUKEY TEST
+```{r}
+st_anova_winter <- aov(sens_temp ~ cluster, db_seoul_cluster_winter %>% filter(month %in% c('12', '01', '02')))
+
+plot(TukeyHSD(st_anova_winter))
+```
+
+* 체감온도는 2번 군집이 평균적으로 가장 높고 3번 군집이 가장 낮다. 따라서 3번 군집이 겨울에 가장 추운 구들이다. 
+
+### 군집별로 랄라블라 품목별 판매량 비교하기.
+
+```{r, echo=FALSE}
+load('cluster_st_winter.RData')
+load('lala_store.RData')
+load('pdensity.RData')
+
+db_lala = fread('db_lala.csv', encoding = 'UTF-8') %>% as_tibble()
+
+db_lala$lala_sale_date = as.character(db_lala$lala_sale_date)
+
+db_lala = db_lala %>% mutate(month = substr(lala_sale_date, 5, 6))
+
+db_lala_sum = db_lala %>% filter(month %in% c('12', '01', '02')) %>% group_by(lala_gun, lala_category) %>% summarise(sum_qty = sum(lala_qty)) %>% ungroup()
+
+db_lala_sum_winter = db_lala_sum %>% left_join(lala_store, by = c('lala_gun' = 'code_gun'))
+
+db_lala_sum_winter = db_lala_sum_winter %>% mutate(qty_store_count = sum_qty/store_count)
+
+db_lala_sum_winter = db_lala_sum_winter %>% left_join(cluster_st_winter, by = c('lala_gun' = 'code_gun'))
+
+db_lala_winter_category_st_cluster = db_lala_sum_winter %>% 
+        filter(!is.na(cluster)) %>% 
+        group_by(cluster, lala_category) %>% 
+        summarise(sum_qsc = mean(qty_store_count, na.rm = T)) %>%
+        ungroup()
+db_lala_for_aov = db_lala %>% left_join(lala_store, by = c('lala_gun' = 'code_gun')) %>% left_join(cluster_st_winter, by = c('lala_gun' = 'code_gun'))
+
+db_lala_for_aov = db_lala_for_aov %>% mutate(lala_qty_sc = lala_qty/store_count)
+
+db_lala_for_aov_winter = db_lala_for_aov %>% filter(month %in% c('12', '01', '02')) %>% group_by(lala_gun, lala_sale_date, lala_category, cluster) %>% summarise(lala_sum_qty_sc = sum(lala_qty_sc)) %>% ungroup()
+```
+
+```{r}
+
+# 클러스터별 판매량
+
+db_lala_cluster_aov = db_lala_for_aov_winter %>% group_by(cluster, lala_sale_date, lala_category) %>% summarise(cluster_qty = mean(lala_sum_qty_sc)) %>% spread(lala_category, cluster_qty)
+
+
+####클러스터별 판매량
+
+#oneway.test(네일 ~ cluster, data = db_lala_cluster_aov)$p.value 
+#oneway.test(립컬러 ~ cluster, data = db_lala_cluster_aov)$p.value 
+#oneway.test(마스크팩 ~ cluster, data = db_lala_cluster_aov)$p.value 
+#oneway.test(바디로션 ~ cluster, data = db_lala_cluster_aov)$p.value 
+#oneway.test(선케어 ~ cluster, data = db_lala_cluster_aov)$p.value 
+#oneway.test(제모제 ~ cluster, data = db_lala_cluster_aov)$p.value 
+#oneway.test(체중조절 ~ cluster, data = db_lala_cluster_aov)$p.value 
+#oneway.test(크림로션 ~ cluster, data = db_lala_cluster_aov)$p.value 
+#oneway.test(훼이셜클렌저 ~ cluster, data = db_lala_cluster_aov)$p.value 
+
+par(mfrow=c(3,3))
+
+nail = aov(네일 ~ cluster, data = db_lala_cluster_aov)
+plot(TukeyHSD(nail))
+
+lip = aov(립컬러 ~ cluster, data = db_lala_cluster_aov)
+plot(TukeyHSD(lip))
+
+mask = aov(마스크팩 ~ cluster, data = db_lala_cluster_aov)
+plot(TukeyHSD(mask))
+
+body = aov(바디로션 ~ cluster, data = db_lala_cluster_aov)
+plot(TukeyHSD(body))
+
+sun = aov(선케어 ~ cluster, data = db_lala_cluster_aov)
+plot(TukeyHSD(sun))
+
+cut = aov(제모제 ~ cluster, data = db_lala_cluster_aov)
+plot(TukeyHSD(cut))
+
+weight = aov(체중조절 ~ cluster, data = db_lala_cluster_aov)
+plot(TukeyHSD(weight))
+
+cream = aov(크림로션 ~ cluster, data = db_lala_cluster_aov)
+plot(TukeyHSD(cream))
+
+facial = aov(훼이셜클렌저 ~ cluster, data = db_lala_cluster_aov)
+plot(TukeyHSD(facial))
+```

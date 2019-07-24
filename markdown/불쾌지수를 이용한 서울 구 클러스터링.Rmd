@@ -1,0 +1,97 @@
+---
+title: "불쾌지수를 이용한 서울 구 클러스터링"
+author: "SungChul Hong"
+date: '2019 7 16 '
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+library(kableExtra)
+library(tidyverse)
+library(data.table)
+
+opts_knit$set(root.dir ='C:\\Users\\UOS\\Desktop\\weather\\data')
+```
+
+```{r, echo=FALSE}
+load('db_seoul_cluster_thi_summer.RData')
+```
+
+### 여름 불쾌지수를 이용해서 군집들을 가지고 불쾌지수 ANOVA TEST 
+
+```{r}
+oneway.test(thi ~ cluster, data = db_seoul_cluster_thi_summer %>% filter(month %in% c('06', '07', '08')))
+
+```
+
+* 클러스터별로 불쾌지수의 평균은 다르다라는 결과가 나옴.
+
+### Tukey TEST 
+
+```{r}
+thi_anova_summer <- aov(thi ~ cluster, data = db_seoul_cluster_thi_summer %>% filter(month %in% c('06', '07', '08')))
+
+plot(TukeyHSD(thi_anova_summer))
+```
+
+* 3번 군집이 가장 불쾌지수가 높은 걸로 나옴(3 > 1 > 2).
+
+### 군집별로 랄라블라 품목별 판매량 비교하기.
+
+```{r, echo=FALSE}
+load('cluster_thi_summer.RData')
+load('lala_store.RData')
+load('pdensity.RData')
+db_lala = fread('db_lala.csv', encoding = 'UTF-8') %>% as_tibble()
+
+db_lala$lala_sale_date = as.character(db_lala$lala_sale_date)
+
+db_lala = db_lala %>% mutate(month = substr(lala_sale_date, 5, 6))
+
+db_lala_for_aov = db_lala %>% left_join(lala_store, by = c('lala_gun' = 'code_gun')) %>% left_join(cluster_thi_summer, by = c('lala_gun' = 'code_gun'))
+
+db_lala_for_aov = db_lala_for_aov %>% mutate(lala_qty_sc = lala_qty/store_count)
+
+db_lala_for_aov_summer = db_lala_for_aov %>% filter(month %in% c('06', '07', '08')) %>% group_by(lala_gun, lala_sale_date, lala_category, cluster) %>% summarise(lala_sum_qty_sc = sum(lala_qty_sc)) %>% ungroup()
+```
+
+```{r}
+# 클러스터별 판매량
+db_lala_cluster_aov = db_lala_for_aov_summer %>% group_by(cluster, lala_sale_date, lala_category) %>% summarise(cluster_qty = mean(lala_sum_qty_sc)) %>% spread(lala_category, cluster_qty)
+
+####클러스터별 판매량, alpha = 0.01
+
+# oneway.test(네일 ~ cluster, data = db_lala_cluster_aov)$p.value # 기각 못함
+# oneway.test(립컬러 ~ cluster, data = db_lala_cluster_aov)$p.value # 기각
+# oneway.test(마스크팩 ~ cluster, data = db_lala_cluster_aov)$p.value # 기각 못함
+# oneway.test(바디로션 ~ cluster, data = db_lala_cluster_aov)$p.value # 기각
+# oneway.test(선케어 ~ cluster, data = db_lala_cluster_aov)$p.value # 기각 or 기각 못함
+# oneway.test(제모제 ~ cluster, data = db_lala_cluster_aov)$p.value # 기각 못함
+# oneway.test(체중조절 ~ cluster, data = db_lala_cluster_aov)$p.value # 기각 못함
+# oneway.test(크림로션 ~ cluster, data = db_lala_cluster_aov)$p.value # 기각
+# oneway.test(훼이셜클렌저 ~ cluster, data = db_lala_cluster_aov)$p.value # 기각
+
+# 결과 불쾌지수가 높은 
+par(mfrow=c(2,3))
+
+lip = aov(립컬러 ~ cluster, data = db_lala_cluster_aov)
+plot(TukeyHSD(lip))
+
+body = aov(바디로션 ~ cluster, data = db_lala_cluster_aov)
+plot(TukeyHSD(body))
+
+sun = aov(선케어 ~ cluster, data = db_lala_cluster_aov)
+plot(TukeyHSD(sun))
+
+cream = aov(크림로션 ~ cluster, data = db_lala_cluster_aov)
+plot(TukeyHSD(cream))
+
+facial = aov(훼이셜클렌저 ~ cluster, data = db_lala_cluster_aov)
+plot(TukeyHSD(facial))
+```
+
+* 선케어를 제외하고 나머지 4품목에서 모두 3번 군집의 판매량이 저조하다.
+
+
+
